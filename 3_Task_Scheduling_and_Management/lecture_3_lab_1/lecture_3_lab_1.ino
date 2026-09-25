@@ -46,7 +46,7 @@ void setup() {
     "Task_B",
     2048,
     NULL,
-    2,              // Priority 2 (Higher)
+    1,              // Priority 2 (Higher)
     &TaskB_Handle,  // Store the handle for Task A to use
     1
   );
