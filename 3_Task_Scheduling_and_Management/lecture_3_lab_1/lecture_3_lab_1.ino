@@ -15,7 +15,7 @@ void TaskA(void *pvParameters) {
 
       // vTaskDelay is used here purely to slow down the loop so you can read it.
       // It does not hide the scheduler preemption, which happens instantly on the line above.
-      vTaskDelay(100 / portTICK_PERIOD_MS);
+      // vTaskDelay(100 / portTICK_PERIOD_MS);
     }
     
     Serial.println();
