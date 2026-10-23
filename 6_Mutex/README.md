@@ -17,4 +17,8 @@ This assignment demonstrates using a mutex to prevent the `setup()` function fro
 > *The setup function can't do anything until it can take the mutex from led task after it has been given.*
 
 **4. Why is this described as a demonstration hack? What would be a better design in a real application?**
-> *Using a queue would be a better approach to this problem, this would simplify the architecture.*
+> *Using a queue would be a better approach to this problem, this would simplify the architecture.*>
+
+## AI Usage
+- **Tool used:** Gemini
+- **How I used it:** I used it to format my readme
