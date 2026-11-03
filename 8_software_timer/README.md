@@ -46,3 +46,7 @@ Build a 10-second study session timer using an ESP32-S3, an SSD1306 OLED display
 
 **5. How does your program prevent extra `s` commands from extending the session?**
 > I use an enumerated state variable to keep track of the status of the machine. The program will only accept an input while the machine is in the 'ready' state. This is thanks to the 3rd 'resettimer', without this the code would have to be modified to not accept input when the state is running.
+
+## 3. AI Assistance
+- **Tool used:** Gemini
+- **How I used it:** I used Gemini to generate boilerplate code and for formatting the README.md
