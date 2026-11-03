@@ -128,7 +128,7 @@ void loop() {
     char c = Serial.read();
     
     // Start or restart session if 's' or 'S' is received
-    if ((c == 's' || c == 'S') && currentState != STATE_RUNNING) {
+    if ((c == 's' || c == 'S') && currentState == STATE_READY) {
       // Clear out the serial buffer in case of multiple characters
       while (Serial.available()) Serial.read(); 
       
