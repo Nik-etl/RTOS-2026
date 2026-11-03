@@ -7,21 +7,23 @@
 // --- Hardware Pins ---
 constexpr uint8_t SDA_PIN = 8;
 constexpr uint8_t SCL_PIN = 9;
-constexpr uint8_t LED_PIN = 2; // Adjust for your specific ESP32-S3 board
+constexpr uint8_t LED_PIN = 6;
 
 // --- OLED Display Object ---
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(/* rotation=*/U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
 
 // --- Task Notification Event Bits ---
-constexpr uint32_t EVENT_TICK     = (1 << 0);
-constexpr uint32_t EVENT_COMPLETE = (1 << 1);
+constexpr uint32_t EVENT_TICK     = (1 << 0); //1 shifted 0 (01)
+constexpr uint32_t EVENT_COMPLETE = (1 << 1); //1 shifted 1 (10)
 
 // --- Global Variables ---
 TaskHandle_t mainTaskHandle = NULL;
 TimerHandle_t periodicTimer;
 TimerHandle_t oneShotTimer;
+TimerHandle_t resetTimer;
+constexpr uint32_t EVENT_RESET    = (1 << 2); // event for returning to ready
 
-enum SessionState {
+enum SessionState { //state machine
   STATE_READY,
   STATE_RUNNING,
   STATE_COMPLETE
@@ -44,6 +46,12 @@ void oneShotTimerCallback(TimerHandle_t xTimer) {
   // Send completion event to the main application task
   if (mainTaskHandle != NULL) {
     xTaskNotify(mainTaskHandle, EVENT_COMPLETE, eSetBits);
+  }
+}
+
+void resetTimerCallback(TimerHandle_t xTimer) {
+  if (mainTaskHandle != NULL) {
+    xTaskNotify(mainTaskHandle, EVENT_RESET, eSetBits);
   }
 }
 
@@ -102,6 +110,14 @@ void setup() {
     (void *)1,
     oneShotTimerCallback
   );
+  // 3. Create event reset timer
+  resetTimer = xTimerCreate(
+    "ResetTimer",
+    pdMS_TO_TICKS(1000),  // 1-second delay
+    pdFALSE,              // One-shot
+    (void *)2,
+    resetTimerCallback
+  );
 
   drawReady();
 }
@@ -149,9 +165,20 @@ void loop() {
         currentState = STATE_COMPLETE;
         
         digitalWrite(LED_PIN, LOW);
-        xTimerStop(periodicTimer, 0); // Stop the 1-second ticks
+        xTimerStop(periodicTimer, 0); 
         
         drawComplete();
+        
+        // Start the 1-second countdown to reset the screen
+        xTimerStart(resetTimer, 0); 
+      }
+    }
+
+    // New event handler catches the reset timer firing
+    if (notifiedValue & EVENT_RESET) {
+      if (currentState == STATE_COMPLETE) {
+        currentState = STATE_READY;
+        drawReady();
       }
     }
   }
