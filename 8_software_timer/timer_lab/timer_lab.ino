@@ -59,8 +59,8 @@ void resetTimerCallback(TimerHandle_t xTimer) {
 void drawReady() {
   u8g2.clearBuffer();
   u8g2.setFont(u8g2_font_ncenB10_tr);
-  u8g2.drawStr(10, 20, "Ready");
-  u8g2.drawStr(10, 40, "Send s/S to start");
+  u8g2.drawStr(10, 20, "Press S");
+  u8g2.drawStr(10, 40, "");
   u8g2.sendBuffer();
 }
 
