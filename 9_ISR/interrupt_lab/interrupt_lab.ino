@@ -1,93 +1,71 @@
 #include <Arduino.h>
 #include "freertos/FreeRTOS.h"
-#include "freertos/semphr.h"
+#include "freertos/queue.h"
 #include "freertos/task.h"
 
-constexpr bool USE_COUNTING = false;  // Set to true for the second run.
-constexpr int LED_PIN = 4;
-constexpr unsigned PACKAGE_COUNT = 5;
+constexpr uint32_t TASK_DELAY_MS = 500; 
 
-SemaphoreHandle_t packageSem = nullptr;
-TaskHandle_t packageTaskHandle = nullptr;
-hw_timer_t *packageTimer = nullptr;
+QueueHandle_t sequenceQueue = nullptr;
+hw_timer_t *hwTimer = nullptr;
 
-void ARDUINO_ISR_ATTR onPackage() {
-    static unsigned generated = 0;
+void ARDUINO_ISR_ATTR onTimer() {
+    static uint32_t sequenceNumber = 1;
+    
+    // copies current number before queue just in case it is full, allowing for ISR to send next time it is called
+    uint32_t valueToSend = sequenceNumber;
+    sequenceNumber++;
 
-    if (generated == PACKAGE_COUNT) {
-        return;
+    BaseType_t taskWoken = pdFALSE;
+    
+    xQueueSendFromISR(sequenceQueue, &valueToSend, &taskWoken);
+
+    // Yield to the FreeRTOS schedulerif a higher priority task was woken
+    if (taskWoken == pdTRUE) {
+        portYIELD_FROM_ISR();
     }
+}
 
-    // Each interrupt represents one package passing the sensor.
-    xSemaphoreGiveFromISR(packageSem, nullptr);
-    ++generated;
+// FreeRTOS Consumer Task
+void consumerTask(void *pvParameters) {
+    uint32_t receivedValue;
 
-    // Tell the task to start counting only after the fifth package.
-    if (generated == PACKAGE_COUNT) {
-        BaseType_t taskWoken = pdFALSE;
-        vTaskNotifyGiveFromISR(packageTaskHandle, &taskWoken);
+    while (true) {
+        // Wait indefinitely for an item to appear in the queue
+        if (xQueueReceive(sequenceQueue, &receivedValue, portMAX_DELAY) == pdTRUE) {
+            
+            // Print one sequence number per line
+            Serial0.println(receivedValue);
 
-        if (taskWoken == pdTRUE) {
-            portYIELD_FROM_ISR();
+            // Delay simulating task processing time (20 ms or 500 ms)
+            vTaskDelay(pdMS_TO_TICKS(TASK_DELAY_MS));
         }
     }
 }
 
-void packageTask(void *) {
-    ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-    timerStop(packageTimer);
-
-    Serial0.println("Sensor generated 5 package signals.");
-
-    unsigned counted = 0;
-    while (xSemaphoreTake(packageSem, 0) == pdTRUE) {
-        ++counted;
-        Serial0.printf("LED flash %u\n", counted);
-
-        digitalWrite(LED_PIN, HIGH);
-        vTaskDelay(pdMS_TO_TICKS(300));
-        digitalWrite(LED_PIN, LOW);
-        vTaskDelay(pdMS_TO_TICKS(300));
-    }
-
-    Serial0.printf("Packages counted: %u\n", counted);
-    vTaskDelete(nullptr);
-}
-
 void setup() {
     Serial0.begin(115200);
-    pinMode(LED_PIN, OUTPUT);
-    digitalWrite(LED_PIN, LOW);
 
-    if (USE_COUNTING) {
-        packageSem = xSemaphoreCreateCounting(PACKAGE_COUNT, 0);
-    } else {
-        packageSem = xSemaphoreCreateBinary();
-    }
-
-    if (packageSem == nullptr) {
-        Serial0.println("Semaphore creation failed.");
+    sequenceQueue = xQueueCreate(4, sizeof(uint32_t));
+    if (sequenceQueue == nullptr) {
+        Serial0.println("Queue creation failed.");
         return;
     }
 
-    packageTimer = timerBegin(1000000);
-    if (packageTimer == nullptr) {
+    if (xTaskCreate(consumerTask, "Consumer", 2048, nullptr, 1, nullptr) != pdPASS) {
+        Serial0.println("Task creation failed.");
+        return;
+    }
+
+    hwTimer = timerBegin(1000000); // init hardwareclock at 1MHz
+    if (hwTimer == nullptr) {
         Serial0.println("Timer creation failed.");
         return;
     }
 
-    if (xTaskCreate(packageTask, "Packages", 4096, nullptr, 2,
-                    &packageTaskHandle) != pdPASS) {
-        Serial0.println("Task creation failed.");
-        timerEnd(packageTimer);
-        return;
-    }
-
-    Serial0.println(USE_COUNTING ? "Counting semaphore" : "Binary semaphore");
-    timerAttachInterrupt(packageTimer, onPackage);
-    timerAlarm(packageTimer, 100000, true, 0);  // One interrupt every 100 ms.
+    timerAttachInterrupt(hwTimer, onTimer);
+    timerAlarm(hwTimer, 100000, true, 0); 
 }
 
 void loop() {
-    delay(1000);
+    vTaskDelay(pdMS_TO_TICKS(1000));
 }
